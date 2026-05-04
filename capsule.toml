@@ -1,0 +1,115 @@
+# ato capsule manifest for WasedaP2P (RFC dependency-contract grammar).
+#
+# Run with:
+#     export SECRET_KEY=$(openssl rand -hex 32)
+#     export PG_PASSWORD=$(openssl rand -hex 16)
+#     ato run .
+#
+# ato now starts Postgres for you via the [dependencies.db] block —
+# you no longer need to provision the database yourself.
+#
+# Required ato CLI: dependency-contract feature (post-c2e9e7a4 main).
+# See docs/rfcs/accepted/CAPSULE_DEPENDENCY_CONTRACTS.md in ato-run/ato.
+#
+# Env split:
+#   - SECRET_KEY: per-user secret used directly by FastAPI (target env).
+#   - PG_PASSWORD: per-user secret used only by the dependency credential
+#     resolver. It is materialized via Rule M1 TempFile into the postgres
+#     provider on first init, embedded in DATABASE_URL by the provider's
+#     runtime_exports template, and redacted from logs / receipts.
+#     PG_PASSWORD is intentionally NOT in [isolation].allow_env — the
+#     consumer target never sees the raw password, only the resolved
+#     DATABASE_URL.
+#   - Everything else is app config in [targets.app.env].
+
+schema_version = "0.3"
+name           = "wasedap2p-backend"
+version        = "0.1.0"
+type           = "app"
+default_target = "app"
+
+# Manifest top-level required_env: dep parameter / credential resolution
+# scope (RFC §5.2). {{env.PG_PASSWORD}} in [dependencies.db.credentials]
+# is only allowed because PG_PASSWORD appears here.
+required_env = ["PG_PASSWORD"]
+
+[metadata]
+display_name = "WasedaP2P (backend)"
+description  = "Waseda peer-to-peer notes & folders sharing app — FastAPI backend"
+author       = "itsukison"
+tags         = ["fastapi", "postgres", "waseda", "p2p"]
+
+# The frontend (React + Vite) is intentionally out of scope here.
+
+# ── Dependencies ────────────────────────────────────────────────────────
+#
+# A Postgres provider (ato/postgres@16) implementing the service@1
+# contract. ato will fetch the provider, allocate a port, derive a per-
+# project state directory, materialize the credential into a 0600 temp
+# file on first init, run pg_isready, then expose the resolved
+# DATABASE_URL to this capsule's target env.
+
+# NOTE: the URL parser in capsule-core's lockfile path currently expects
+# `capsule://ato/<publisher>/<slug>@<version>` (two path segments).
+# The RFC §4.2 short form `capsule://ato/postgres@16` (one segment) is
+# accepted by `verify_and_lock` but rejected by the registry fetch
+# parser (`parse_store_capsule_source`). Until that gap is closed, we
+# use the two-segment form pointing at the official registry namespace.
+[dependencies.db]
+capsule  = "capsule://ato/ato-run/postgres@16"
+contract = "service@1"
+
+# Identity-bearing parameters (RFC §7.3): these enter the consumer's
+# v2 receipt identity hash. Changing `database` re-creates the state.
+[dependencies.db.parameters]
+database = "wasedap2p"
+
+# Runtime-only credentials (RFC §7.3.1): identity is preserved across
+# password rotation. The lock records the {{env.X}} template form only;
+# the resolved value never appears in argv, env capture, or logs.
+[dependencies.db.credentials]
+password = "{{env.PG_PASSWORD}}"
+
+# Per-parent state directory (RFC §7.7). Path resolves to:
+#   <ato_home>/state/<wasedap2p-backend@0.1.0>/<instance_hash>/16/data/
+[dependencies.db.state]
+name = "data"
+
+# ── Target ──────────────────────────────────────────────────────────────
+
+[targets.app]
+runtime         = "source"
+driver          = "python"
+runtime_version = "3.11.10"
+working_dir     = "backend"
+# main.py is an ASGI module without an `if __name__` block, so launch
+# via `python -m uvicorn`.
+run  = "python -m uvicorn main:app --host 127.0.0.1 --port 8000"
+port = 8000
+# `needs` blocks target start until `db` is ready (RFC §8).
+needs        = ["db"]
+required_env = ["SECRET_KEY"]
+
+[targets.app.env]
+ALGORITHM       = "HS256"
+# DATABASE_URL is now resolved from the dep at start time. Origin tag is
+# DepRuntimeExport so the value is excluded from v2 receipt identity.
+DATABASE_URL    = "{{deps.db.runtime_exports.DATABASE_URL}}"
+FRONTEND_URL    = "http://localhost:5173"
+SMTP_HOST       = "smtp.gmail.com"
+SMTP_PORT       = "587"
+SMTP_USERNAME   = ""
+SMTP_PASSWORD   = ""
+SMTP_FROM_EMAIL = ""
+SMTP_USE_TLS    = "true"
+SMTP_USE_SSL    = "false"
+
+[isolation]
+# SECRET_KEY: target reads directly via env injection.
+# PG_PASSWORD intentionally NOT here — only the dep credential resolver
+# uses it, and the consumer connects via the resolved DATABASE_URL.
+allow_env = ["SECRET_KEY"]
+
+[network]
+# uvicorn binds 127.0.0.1; outbound only for SMTP.
+egress_allow = ["smtp.gmail.com"]
