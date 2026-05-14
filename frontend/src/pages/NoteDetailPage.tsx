@@ -37,14 +37,17 @@ export function NoteDetailPage() {
   }
 
   const handleVote = async (type: "up" | "down") => {
-    await voteNote(note.id, type);
+    const result = await voteNote(note.id, type);
     setNote((prev) => {
       if (!prev) return prev;
-      const upvotes = type === "up" ? prev.upvotes + 1 : prev.upvotes;
-      const downvotes = type === "down" ? prev.downvotes + 1 : prev.downvotes;
-      return { ...prev, upvotes, downvotes, netScore: upvotes - downvotes };
+      return { 
+        ...prev, 
+        upvotes: result.upvotes, 
+        downvotes: result.downvotes, 
+        netScore: result.netScore 
+      };
     });
-  };
+};
 
   const handleDownload = () => {
     toast.info(`Downloading ${note.fileName}…`);

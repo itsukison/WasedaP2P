@@ -11,13 +11,6 @@
  */
 
 import type { Note, User } from "@/types";
-import {
-  mockNotes,
-  mockUsers,
-  getNoteById,
-  getNotesByUploader,
-  getUserByUsername,
-} from "@/data/mockData";
 
 const _BASE_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
@@ -124,6 +117,16 @@ export async function getNotesByUploaderApi(username: string): Promise<Note[]> {
     uploadDate: new Date(n.uploadDate),
   }));
 }
+
+export async function getUserStatsApi(username: string): Promise<{
+  totalNotes: number;
+  totalUpvotes: number;
+  coursesContributed: number;
+}> {
+  const response = await apiFetch(`/api/notes/user/${username}/stats`);
+  return response.json();
+}
+
 /**
  * Upload a new note to the platform
  * Used on: UploadPage
@@ -167,12 +170,13 @@ export async function uploadNote(data: Omit<Note, "id" | "upvotes" | "downvotes"
  * Payload: { type: "up" | "down" }
  * Returns: void (just update the count on frontend)
  */
-export async function voteNote(id: string, type: "up" | "down"): Promise<void> {
-  await apiFetch(`/api/notes/${id}/vote`, {
+export async function voteNote(id: string, type: "up" | "down"): Promise<{upvotes: number, downvotes: number, netScore: number}> {
+  const response = await apiFetch(`/api/notes/${id}/vote`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ type }),
   });
+  return response.json();
 }
 /**
  * Report a note for inappropriate content
@@ -191,6 +195,8 @@ export async function reportNote(id: string, reason: string): Promise<void> {
     body: JSON.stringify({ reason }),
   });
 }
+
+
 // USERS
 
 
@@ -199,8 +205,10 @@ export async function reportNote(id: string, reason: string): Promise<void> {
  * Backend: GET /api/users
  * Returns: Array of all user profiles
  */
+
 export async function getUsers(): Promise<User[]> {
-  return Promise.resolve([...mockUsers]);
+  const response = await apiFetch("/api/users");
+  return response.json();
 }
 
 /**
@@ -209,10 +217,15 @@ export async function getUsers(): Promise<User[]> {
  * Backend: GET /api/users/{username}
  * Returns: User object or null if not found
  */
-export async function getUserApi(username: string): Promise<User | null> {
-  return Promise.resolve(getUserByUsername(username) ?? null);
-}
 
+export async function getUserApi(username: string): Promise<User | null> {
+  try {
+    const response = await apiFetch(`/api/users/${username}`);
+    return response.json();
+  } catch {
+    return null;
+  }
+}
 
 // AUTH
 

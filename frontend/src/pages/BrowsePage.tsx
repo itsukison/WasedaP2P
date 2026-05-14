@@ -66,16 +66,19 @@ export function BrowsePage() {
   const hasActiveFilters = filters.faculty || filters.department || filters.course;
 
   const handleVote = async (id: string, type: "up" | "down") => {
-    await voteNote(id, type);
+    const result = await voteNote(id, type);
     setNotes((prev) =>
       prev.map((n) => {
         if (n.id !== id) return n;
-        const upvotes = type === "up" ? n.upvotes + 1 : n.upvotes;
-        const downvotes = type === "down" ? n.downvotes + 1 : n.downvotes;
-        return { ...n, upvotes, downvotes, netScore: upvotes - downvotes };
+        return { 
+          ...n, 
+          upvotes: result.upvotes, 
+          downvotes: result.downvotes, 
+          netScore: result.netScore 
+        };
       })
     );
-  };
+};
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-10">

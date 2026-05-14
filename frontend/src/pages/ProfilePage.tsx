@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import type { User, Note } from "@/types";
-import { getUserApi, getNotesByUploaderApi } from "@/services/api";
+import { getUserApi, getNotesByUploaderApi, getUserStatsApi } from "@/services/api";
 import { NoteListItem } from "@/components/notes/NoteListItem";
 import { TimetableSection } from "@/components/profile/TimetableSection";
 import { voteNote } from "@/services/api";
@@ -16,10 +16,19 @@ export function ProfilePage() {
     if (!username) return;
     getUserApi(username).then((u) => {
       if (!u) navigate("/browse");
-      else setUser(u);
+      else {
+        getUserStatsApi(username).then((stats) => {
+          setUser({
+            ...u,
+            totalNotes: stats.totalNotes,
+            totalUpvotes: stats.totalUpvotes,
+            coursesContributed: stats.coursesContributed,
+          });
+        });
+      }
     });
     getNotesByUploaderApi(username).then(setNotes);
-  }, [username, navigate]);
+}, [username, navigate]);
 
   if (!user) {
     return (
@@ -30,16 +39,19 @@ export function ProfilePage() {
   }
 
   const handleVote = async (id: string, type: "up" | "down") => {
-    await voteNote(id, type);
+    const result = await voteNote(id, type);
     setNotes((prev) =>
       prev.map((n) => {
         if (n.id !== id) return n;
-        const upvotes = type === "up" ? n.upvotes + 1 : n.upvotes;
-        const downvotes = type === "down" ? n.downvotes + 1 : n.downvotes;
-        return { ...n, upvotes, downvotes, netScore: upvotes - downvotes };
+        return {
+          ...n,
+          upvotes: result.upvotes,
+          downvotes: result.downvotes,
+          netScore: result.netScore,
+        };
       })
     );
-  };
+};
 
   const groupedNotes = notes.reduce<Record<string, Note[]>>((acc, note) => {
     if (!acc[note.faculty]) acc[note.faculty] = [];
