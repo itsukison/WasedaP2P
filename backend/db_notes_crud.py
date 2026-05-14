@@ -2,6 +2,7 @@ import os
 import shutil
 from sqlalchemy.orm import Session
 from models_notes import Note, NoteReport
+from db_vote_crud import get_vote, create_vote, update_vote, delete_vote
 
 UPLOAD_DIR = "uploaded_notes"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -117,15 +118,38 @@ def create_note(
     return format_note(note)
 
 
-def vote_on_note(db: Session, note_id: int, vote_type: str) -> dict | None:
+def vote_on_note(db: Session, note_id: int, vote_type: str, user_id: int) -> dict | None:
     note = db.query(Note).filter(Note.id == note_id).first()
     if not note:
         return None
 
-    if vote_type == "up":
-        note.upvotes += 1
-    elif vote_type == "down":
-        note.downvotes += 1
+    vote_value = 1 if vote_type == "up" else -1
+    existing_vote = get_vote(db, user_id, "note", note_id)
+
+    if existing_vote:
+        if existing_vote.vote_value == vote_value:
+            # Same vote again → remove it (toggle off)
+            if vote_type == "up":
+                note.upvotes = max(0, note.upvotes - 1)
+            else:
+                note.downvotes = max(0, note.downvotes - 1)
+            delete_vote(db, existing_vote)
+        else:
+            # Different vote → switch it
+            if vote_type == "up":
+                note.upvotes += 1
+                note.downvotes = max(0, note.downvotes - 1)
+            else:
+                note.downvotes += 1
+                note.upvotes = max(0, note.upvotes - 1)
+            update_vote(db, existing_vote, vote_value)
+    else:
+        # First time voting
+        if vote_type == "up":
+            note.upvotes += 1
+        else:
+            note.downvotes += 1
+        create_vote(db, user_id, "note", note_id, vote_value)
 
     db.commit()
     db.refresh(note)
@@ -135,6 +159,28 @@ def vote_on_note(db: Session, note_id: int, vote_type: str) -> dict | None:
         "netScore": note.upvotes - note.downvotes,
     }
 
+def get_user_stats(db: Session, username: str) -> dict:
+    from models import UserModel
+    
+    user = db.query(UserModel).filter(UserModel.username == username).first()
+    if not user:
+        return {
+            "totalNotes": 0,
+            "totalUpvotes": 0,
+            "coursesContributed": 0,
+        }
+    
+    notes = db.query(Note).filter(Note.uploader_id == user.id).all()
+    
+    total_notes = len(notes)
+    total_upvotes = sum(n.upvotes for n in notes)
+    courses_contributed = len(set(n.course_name for n in notes))
+    
+    return {
+        "totalNotes": total_notes,
+        "totalUpvotes": total_upvotes,
+        "coursesContributed": courses_contributed,
+    }
 
 def report_note(
     db: Session, note_id: int, reporter_id: int, reason: str

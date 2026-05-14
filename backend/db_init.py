@@ -4,20 +4,20 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-
 DATABASE_URL = os.getenv('DATABASE_URL')
-
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(
-    autocommit=False, 
-    autoflush=False, 
+    autocommit=False,
+    autoflush=False,
     bind=engine
 )
 Base = declarative_base()
 
 def create_tables():
+    import models          
+    import models_notes    
+    import models_users    
     Base.metadata.create_all(bind=engine)
-
 
 def ensure_schema_updates():
     with engine.begin() as connection:

@@ -20,7 +20,7 @@ from db_login_crud import get_user_id, get_user_by_id, get_user_by_email, create
 from db_folder_crud import create_folder, validate_folder_creation, delete_folder, get_folder, rename_folder
 from db_vote_crud import get_vote, create_vote, update_vote, delete_vote, get_vote_stats, update_votable_counts, validate_votable_exists, get_user_votes
 from notes_router import router as notes_router
-
+from users_router import router as users_router
 
 load_dotenv()
 
@@ -807,3 +807,4 @@ def get_my_votes(
     }
 
 app.include_router(notes_router)
+app.include_router(users_router)

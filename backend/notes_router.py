@@ -9,6 +9,7 @@ from db_notes_crud import (
     vote_on_note,
     report_note,
     get_note_file_path,
+    get_user_stats,
 )
 from pydantic import BaseModel
 import jwt
@@ -67,6 +68,9 @@ def list_notes(
         sort=sort,
     )
 
+@router.get("/user/{username}/stats")
+def get_user_note_stats(username: str, db: Session = Depends(get_db)):
+    return get_user_stats(db, username)
 
 @router.get("/{note_id}")
 def get_note(note_id: int, db: Session = Depends(get_db)):
@@ -117,7 +121,7 @@ def vote(
 ):
     if body.type not in ["up", "down"]:
         raise HTTPException(status_code=400, detail="type must be 'up' or 'down'")
-    result = vote_on_note(db, note_id, body.type)
+    result = vote_on_note(db, note_id, body.type, current_user_id)
     if not result:
         raise HTTPException(status_code=404, detail="Note not found")
     return result
