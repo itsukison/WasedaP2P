@@ -5,6 +5,7 @@ from db_init import Base
 import enum
 from datetime import datetime
 from models_notes import Note, NoteReport
+from models_users import Timetable, TimetableEntry, Faculty, Department, Course
 
 #shared_id_seq = Sequence("shared_id_seq")
 
